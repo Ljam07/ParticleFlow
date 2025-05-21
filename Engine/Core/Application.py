@@ -1,4 +1,4 @@
-from Engine.Window import *
+from Engine.Core.Window import *
     
 class Application:
     def __init__(self, width = 800, height = 600, title = "ParticleFlow"):
