@@ -1,0 +1,3 @@
+21/05/2025 Week 4
+Create a basic window class and application class. This is designed so that it is clean, and modular instead of one whole messy file. 
+I next aim to further develop the core application next before moving onto the actual simulation algorithms.
