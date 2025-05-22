@@ -1,3 +1,9 @@
 21/05/2025 Week 4
 Create a basic window class and application class. This is designed so that it is clean, and modular instead of one whole messy file. 
 I next aim to further develop the core application next before moving onto the actual simulation algorithms.
+
+23/05/2025
+Refactored the core engine framework into clean, modular components. 
+Extracted the GLFW/OpenGL setup into a dedicated Window class that handles context creation, viewport resizing, buffer clearing, and event polling. 
+Implemented a generic Layer base class along with a LayerStack to manage ordered update, draw, and UI callbacks. 
+Developed a complete Renderer class that compiles and links shaders, sets up VAOs/VBOs for a simple triangle, and issues draw calls.
