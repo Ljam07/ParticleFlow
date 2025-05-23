@@ -1,7 +1,6 @@
 from OpenGL.GL import *
 import ctypes
 
-
 class Renderer:
     def __init__(self):
         print("Created Renderer")
