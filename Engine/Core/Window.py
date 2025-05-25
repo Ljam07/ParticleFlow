@@ -62,3 +62,6 @@ class Window:
     def CloseWindow(self):
         glfw.terminate()
         print("Closed Window")
+        
+    def GetWindow(self):
+        return self._window
