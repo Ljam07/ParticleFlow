@@ -27,7 +27,7 @@ class Layer:
         # Override in subclass if needed
         return False
 
-    def OnUI(self):
+    def OnUI(self, dt = None):
         """Called every frame to render UI."""
         # Override in subclass if needed
         pass
@@ -64,8 +64,8 @@ class LayerStack:
             if handled:
                 break
 
-    def OnUI(self):
+    def OnUI(self, deltaTime):
         """Call on_ui for each layer."""
         for layer in self._layers:
-            layer.OnUI()
+            layer.OnUI(deltaTime)
         

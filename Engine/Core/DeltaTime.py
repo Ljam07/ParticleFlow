@@ -5,5 +5,5 @@ class DeltaTime:
     def GetSeconds(self):
         return self._time
     
-    def GetMiliseconds(self):
+    def GetMilliseconds(self):
         return self._time * 1000

@@ -65,3 +65,9 @@ class Window:
         
     def GetWindow(self):
         return self._window
+    
+    def GetHeight(self):
+        return self._height
+    
+    def GetWidth(self):
+        return self._width

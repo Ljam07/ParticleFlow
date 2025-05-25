@@ -13,12 +13,14 @@ class Application:
         self._ui = UI()
         
         self._layer_stack = LayerStack()
-        self._renderer = Renderer()
         self._Running = True
         self._last_frame_time = 0.0
 
     def EndApplication(self):
         self._Running = False
+        
+    def GetWindow(self):
+        return self._window
 
     def Run(self):
         print("Created Application") 
@@ -34,11 +36,10 @@ class Application:
             # update layers if any
             self._ui.BeginFrame()
             self._layer_stack.OnUpdate(deltaTime)
-            self._layer_stack.OnUI()
-            self._ui.EndFrame()
+            self._layer_stack.OnUI(deltaTime)
 
             # draw triangle
-            self._renderer.draw()
+            self._ui.EndFrame()
             self._window.OnUpdate()
 
         self._window.CloseWindow()
