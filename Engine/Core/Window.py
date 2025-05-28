@@ -41,8 +41,9 @@ class Window:
         glViewport(0, 0, self._width, self._height)
         glfw.set_framebuffer_size_callback(self._window, self.__FramebufferSizeCallback)
         
-        #glClearColor(0.2, 0.3, 0.3, 1.0)
         glClearColor(0.125, 0.125, 0.2, 1.0)
+
+        glEnable(GL_DEPTH_TEST);
 
     def __FramebufferSizeCallback(self, window, width, height):
         glViewport(0, 0, width, height)
@@ -53,7 +54,7 @@ class Window:
         glfw.poll_events()
         
     def Clear(self):
-        glClear(GL_COLOR_BUFFER_BIT)        
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)        
 
 
     def WindowOpen(self):
