@@ -13,6 +13,9 @@ from Engine.Renderer.Camera import Camera
 import glm
 import glfw
 
+# App imports
+from App.Simulation.Simulation import *
+
 class ParticleFlowLayer(Layer):
     def __init__(self, window: Window, name="ParticleFlowLayer",):
         super().__init__(name)
@@ -29,6 +32,8 @@ class ParticleFlowLayer(Layer):
         self._camera = Camera()
         self._show_debug = True
         self._colors = glm.vec3(0.2, 0.3, 0.5)
+
+        self._sim = Simulation((10, 9, 8), 10)
         
     def OnAttach(self):
         print("Attached Particle Flow Layer")

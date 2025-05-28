@@ -2,4 +2,4 @@ glfw
 PyOpenGL 
 PyOpenGL_accelerate
 pyglm
-imgui
+imgui[glfw]
