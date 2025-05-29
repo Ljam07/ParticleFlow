@@ -28,7 +28,7 @@ class Simulation:
         self._domain_size: glm.vec3 = glm.vec3(domainDimensions)
         self._particle_amount = numParticles
         self._cells = self._CreateCells()
-        self._CreateParticles()
+        self._particles = self._CreateParticles()
 
     def _CreateCells(self):
         cell_id = 0
@@ -54,26 +54,30 @@ class Simulation:
         x, y, z = self._GetCellIndices(position)
         return self._cells[z][y][x]
 
-    def _CreateParticles(self):
-        count = int(round(self._particle_amount ** (1/3)))  # Particles per axis for uniform grid
-        dx = (self._cube_max.x - self._cube_min.x) / count
-        dy = (self._cube_max.y - self._cube_min.y) / count
-        dz = (self._cube_max.z - self._cube_min.z) / count
+    # TODO properly implement create particles
+    def _CreateParticles(self, cube_size = 1.0, cube_pos: glm.vec3 = glm.vec3(0, 1 ,0)):
+        # m^3 = 3rt(m)
+        m = int(glm.ceil(self._particle_amount ** (1/3)))
+        
+        # cube / subdivisions
+        d = cube_size / m
 
-        for i in range(count):
-            for j in range(count):
-                for k in range(count):
-                    if len(self._particles) >= self._particle_amount:
-                        return
-                    pos = glm.vec3(
-                        self._cube_min.x + i * dx + dx / 2,
-                        self._cube_min.y + j * dy + dy / 2,
-                        self._cube_min.z + k * dz + dz / 2
-                    )
-                    vel = glm.vec3(random.uniform(-0.1, 0.1), random.uniform(-0.1, 0.1), random.uniform(-0.1, 0.1))
-                    p = Particle(position=pos, velocity=vel)
-                    self._particles.append(p)
-                    self._GetCell(pos).add_particle(p)
+        # Holds all points in xyz vec3 form
+        points = []
+
+        for i in range(m):
+            for j in range(m):
+                for k in range(m):
+                    pos: glm.vec3 = glm.vec3(0, 0, 0)
+                    pos.x = (i + 0.5) * d
+                    pos.y = (j + 0.5) * d
+                    pos.z = (k + 0.5) * d
+                    pos += cube_pos
+                    points.append(pos)
+                    print(pos)
+
+        # Trunicate the list if the particles exceed needed amount
+        return points[:self._particle_amount]
 
     def OnUpdate(self, dt: float):
         pass

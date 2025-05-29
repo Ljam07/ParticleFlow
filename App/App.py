@@ -33,13 +33,15 @@ class ParticleFlowLayer(Layer):
         self._show_debug = True
         self._colors = glm.vec3(0.2, 0.3, 0.5)
 
-        self._sim = Simulation((10, 9, 8), 10)
+        self._sim = Simulation((5, 5, 5), 10)
         
     def OnAttach(self):
         print("Attached Particle Flow Layer")
 
     def OnUpdate(self, dt: DeltaTime):
         #Actual application code here
+        self._sim.OnUpdate(dt)
+        
         if not UI.IsHovered():
             self._camera.OnUpdate(self._window.GetWindow())
         self.shader.Use()
@@ -60,7 +62,6 @@ class ParticleFlowLayer(Layer):
             UI.Text(f"FPS: {round(1/time, 2)}")
                     
         UI.End()
-        
         
 
 class App(Application):
