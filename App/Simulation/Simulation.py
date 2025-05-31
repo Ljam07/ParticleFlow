@@ -1,83 +1,101 @@
 import glm
-import random
+import math
 
 class Particle:
-    def __init__(self, position: glm.vec3, radius: float = 0.5, velocity: glm.vec3 = glm.vec3(0)):
-        self.Position = position
-        self.Radius = radius
-        self.Velocity = velocity
-    
-    def Move(self, deltaTime):
-        self.Position += self.Velocity * deltaTime
-
-class Cell:
-    def __init__(self, id: int):
-        self.ID = id
-        self.Particles = []
-
-    def AddParticle(self, particle: Particle):
-        self.Particles.append(particle)
-
-    def RemoveParticle(self, particle: Particle):
-        if particle in self.Particles:
-            self.Particles.remove(particle)
-    
-
-class Simulation:
-    def __init__(self, domainDimensions: glm.vec3, numParticles: int):
-        self._domain_size: glm.vec3 = glm.vec3(domainDimensions)
-        self._particle_amount = numParticles
-        self._cells = self._CreateCells()
-        self._particles = self._CreateParticles()
-
-    def _CreateCells(self):
-        cell_id = 0
-        cells = []
-        for z in range(int(self._domain_size.z)):
-            yz_layer = []
-            for y in range(int(self._domain_size.y)):
-                x_row = []
-                for x in range(int(self._domain_size.x)):
-                    x_row.append(Cell(cell_id))
-                    cell_id += 1
-                yz_layer.append(x_row)
-            cells.append(yz_layer)
-        return cells
-
-    def _GetCellIndices(self, position: glm.vec3):
-        x = int(max(0, min(position.x, self._domain_size.x - 1)))
-        y = int(max(0, min(position.y, self._domain_size.y - 1)))
-        z = int(max(0, min(position.z, self._domain_size.z - 1)))
-        return x, y, z
-
-    def _GetCell(self, position: glm.vec3) -> Cell:
-        x, y, z = self._GetCellIndices(position)
-        return self._cells[z][y][x]
-
-    # TODO properly implement create particles
-    def _CreateParticles(self, cube_size = 1.0, cube_pos: glm.vec3 = glm.vec3(0, 1 ,0)):
-        # m^3 = 3rt(m)
-        m = int(glm.ceil(self._particle_amount ** (1/3)))
+    def __init__(self, position, particleSize, boundSize, frictionCoeficient):
+        self.gravity = glm.vec3(0, -9.8, 0)
+        self.position = position
+        self.velocity = glm.vec3(0)
+        self.ParticleSize = particleSize
+        self.boundSize = boundSize
+        self.color = glm.vec3(1)
+        self.frictionCoefficient = frictionCoeficient
         
-        # cube / subdivisions
-        d = cube_size / m
+    def OnUpdate(self, deltaTime: float):
+        self.velocity += self.gravity * deltaTime
+        self.position += self.velocity * deltaTime
+        self.CheckCollisions()
+    
+    def CheckCollisions(self):
+        halfBoundSize = self.boundSize/2 - glm.vec3(1) * (self.ParticleSize)
+        
+        if abs(self.position.x) > halfBoundSize.x:
+            self.position.x = halfBoundSize.x * glm.sign(self.position.x)
+            self.velocity.x *= -1 * self.frictionCoefficient
+        if abs(self.position.y) > halfBoundSize.y:
+            self.position.y = halfBoundSize.y * glm.sign(self.position.y)
+            self.velocity.y *= -1 * self.frictionCoefficient
+        
+        
+class Simulation:
+    def __init__(self, particleNum: int = 5, particleSize = 1, boundSize = glm.vec3(3), fCoefficient = 0.9, particleSpacing = None):
+        self.particleNumber = int(particleNum)
+        self.particleSize = particleSize
+        self.boundSize = boundSize
+        self.frictionCoefficient = fCoefficient
+        if particleSpacing == None:
+            self.particleSpacing = self.particleSize/2
+        else:
+            self.particleSpacing = particleSpacing
+        self.particles = self.CreateParticles()
 
-        # Holds all points in xyz vec3 form
-        points = []
+    def CreateParticles(self):
+        particles = []
+        if self.particleNumber <= 0:
+            return particles
+        particlesPerRow = max(int(self.particleNumber ** (1/2)), 1)
+        particlesPerColumn = (self.particleNumber - 1) / particlesPerRow + 1
+        spacing = self.particleSize * 2 + self.particleSpacing
+        
+        for i in range(self.particleNumber):
+            pos = glm.vec3((i % particlesPerRow - particlesPerRow / 2 + 0.5) * spacing, \
+                (i / particlesPerRow - particlesPerColumn / 2 + 0.5) * spacing, 0)
+            particles.append(Particle(pos, self.particleSize, self.boundSize, self.frictionCoefficient))
 
-        for i in range(m):
-            for j in range(m):
-                for k in range(m):
-                    pos: glm.vec3 = glm.vec3(0, 0, 0)
-                    pos.x = (i + 0.5) * d
-                    pos.y = (j + 0.5) * d
-                    pos.z = (k + 0.5) * d
-                    pos += cube_pos
-                    points.append(pos)
-                    print(pos)
-
-        # Trunicate the list if the particles exceed needed amount
-        return points[:self._particle_amount]
+        return particles
+    
+    def SmoothKernel(self, radius, dist) -> float:
+        value = max(0, radius * radius - dist * dist)
+        return value
+    
+    def CalculateDensity(self, point: glm.vec3):
+        density = 0
+        mass = 1
+        
+        for particle in self.particles:
+            dist = glm.length(particle.position - point)
+            influence = self.SmoothKernel(0.5, dist)
+            density += mass * influence
+        
+        return density
 
     def OnUpdate(self, dt: float):
-        pass
+        for particle in self.particles:
+            particle.OnUpdate(dt)
+
+    def GetPoints(self) -> list[glm.vec3]:
+        positions = [p.position for p in self.particles]
+        return positions
+
+    def GetColors(self) -> list[glm.vec3]:
+        colors = [p.color for p in self.particles]
+        return colors
+    
+    def SetParticleSize(self, size: float):
+        for particle in self.particles:
+            particle.particleSize = size
+        self.particleSize = size
+    
+    def SetGravity(self, gravity: glm.vec3):
+        for particle in self.particles:
+            particle.gravity = gravity
+    
+    def SetBoundSize(self, bounds: glm.vec3):
+        self.boundSize = bounds
+        for particle in self.particles:
+            particle.boundSize = bounds
+        
+    def SetFrictionCoefficient(self, m: float):
+        self.frictionCoefficient = m
+        for particle in self.particles:
+            particle.frictionCoefficient = m

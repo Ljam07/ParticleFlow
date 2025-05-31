@@ -43,7 +43,13 @@ class Window:
         
         glClearColor(0.125, 0.125, 0.2, 1.0)
 
-        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_DEPTH_TEST)
+        glfw.swap_interval(0)
+        
+        glEnable(GL_CULL_FACE)
+        glCullFace(GL_BACK)
+        glFrontFace(GL_CCW)
+
 
     def __FramebufferSizeCallback(self, window, width, height):
         glViewport(0, 0, width, height)

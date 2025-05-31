@@ -3,6 +3,7 @@ from OpenGL.GL import *
 import ctypes
 
 import math
+import glm
 
 class Mesh:
     """
@@ -28,8 +29,64 @@ class Mesh:
     def __del__(self): 
         del self.vbo; del self.vao
         
+    def SetInstanceData(self,
+                    points: list[glm.vec3],
+                    colors: list[glm.vec3]):
+        # 1) One instance per vec3 in points
+        count = len(points)
+        assert len(colors) == count
+
+        # 2) Clean up old buffer if present
+        if hasattr(self, '_inst_vbo'):
+            glDeleteBuffers(1, [self._inst_vbo])
+        self._inst_vbo = glGenBuffers(1)
+
+        # 3) Prepare interleaved float data: 3 + 3 + 1 = 7 floats per instance
+        floats_per = 6
+        total = count * floats_per
+        ArrayType = GLfloat * total
+
+        inter = []
+        for i in range(count):
+            # expand each glm.vec3 into its x,y,z
+            inter += [points[i].x, points[i].y, points[i].z]
+            inter += [colors[i].x, colors[i].y, colors[i].z]
+
+        buf = ArrayType(*inter)
+
+        # 4) Upload to GPU
+        glBindBuffer(GL_ARRAY_BUFFER, self._inst_vbo)
+        glBufferData(GL_ARRAY_BUFFER,
+                     ctypes.sizeof(buf),
+                     buf,
+                     GL_DYNAMIC_DRAW)
+
+        # 5) Configure per-instance vertex attributes
+        self.vao.Bind()
+        stride = floats_per * ctypes.sizeof(ctypes.c_float)
+
+        # aInstancePoint → location=1, vec3 at offset 0
+        glEnableVertexAttribArray(1)
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(0))
+        glVertexAttribDivisor(1, 1)
+
+        # aInstanceColor → location=2, vec3 at offset 3*sizeof(float)
+        off = 3 * ctypes.sizeof(ctypes.c_float)
+        glEnableVertexAttribArray(2)
+        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(off))
+        glVertexAttribDivisor(2, 1)
+
+        # aInstanceRadius → location=3, float at offset 6*sizeof(float)
+        
+
+        self.vao.Unbind()
+        glBindBuffer(GL_ARRAY_BUFFER, 0)
+
+        # 6) Store count for instanced draw
+        self.instance_count = count
+
     @staticmethod
-    def generate_uv_sphere(stacks: int, slices: int, radius: float = 1.0) -> list[float]:
+    def GenerateUVSphere(stacks: int, slices: int, radius: float = 1.0) -> list[float]:
         """
         Generate a UV sphere as a flat list of triangle vertices (x, y, z).
 

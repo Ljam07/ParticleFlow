@@ -25,7 +25,7 @@ class Application:
     def Run(self):
         print("Created Application") 
         self._ui.InitUI(self._window.GetWindow())
-        while self._window.WindowOpen():
+        while self._window.WindowOpen() and self._Running:
             time = glfw.get_time()
             deltaTime = DeltaTime(time - self._last_frame_time)
             self._last_frame_time = time
@@ -43,5 +43,3 @@ class Application:
             self._window.OnUpdate()
 
         self._window.CloseWindow()
-
-

@@ -13,53 +13,86 @@ from Engine.Renderer.Camera import Camera
 import glm
 import glfw
 
+import imgui
+
 # App imports
 from App.Simulation.Simulation import *
 
 class ParticleFlowLayer(Layer):
-    def __init__(self, window: Window, name="ParticleFlowLayer",):
+    def __init__(self, window: Window, name="ParticleFlowLayer", ):
         super().__init__(name)
         
         self._camera = Camera(aspect=window.GetWidth()/window.GetHeight())
         self._window = window
-        
-        sphere_vertices = Mesh.generate_uv_sphere(6, 12, 1)
-                
-        self.shader: Shader = Shader("App/Shaders/default.vert", "App/Shaders/default.frag")
-        mesh   = Mesh(sphere_vertices)
-        self._renderer = Renderer(self.shader, mesh)
+                      
+        self.shader: Shader = Shader("App/Shaders/Particle.vert", "App/Shaders/Particle.frag")
+
+        self.mesh   = Mesh(Mesh.GenerateUVSphere(6, 12, 1))
+        self._renderer = Renderer(self.shader, self.mesh)
         
         self._camera = Camera()
-        self._show_debug = True
-        self._colors = glm.vec3(0.2, 0.3, 0.5)
 
-        self._sim = Simulation((5, 5, 5), 10)
+        self._particle_size = 0.05
+        self._domain_size = glm.vec3(3)
+        self._friction_coefficient = 0.9
+        self._particle_number = 100
+        self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient)
         
     def OnAttach(self):
         print("Attached Particle Flow Layer")
 
     def OnUpdate(self, dt: DeltaTime):
         #Actual application code here
-        self._sim.OnUpdate(dt)
         
         if not UI.IsHovered():
             self._camera.OnUpdate(self._window.GetWindow())
+            self._sim.OnUpdate(dt.GetSeconds())
         self.shader.Use()
         self.shader.UploadMat4("uView", self._camera.GetViewMatrix())
         self.shader.UploadMat4("uProj", self._camera.GetProjectionMatrix())
+        self.shader.UploadFloat("uParticleRadii", self._particle_size)
         
-        self._renderer.draw()
+        # 2nd largest inefficiency
+        self.mesh.SetInstanceData(self._sim.GetPoints(), self._sim.GetColors())
+        self._renderer.DrawInstanced()
+        # largest inefficiency
+        
+        # self._renderer.Draw()
     
     def OnUI(self, dt: DeltaTime = None):
-        UI.Begin("Debug")
-        self._show_debug, _ = UI.Checkbox("Show Debug Stats", self._show_debug)
+        UI.Begin("Settings")
+        
+        reset = UI.Button("Reset")
+        if reset:
+            self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient)
         
         # Show debug info if true
-        if not (dt == None) and self._show_debug:
+        if imgui.collapsing_header("Stats", flags=imgui.TREE_NODE_DEFAULT_OPEN)[0]:
             time = dt.GetSeconds()
             timems = dt.GetMilliseconds()
             UI.Text(f"Last frame time(ms): {round(timems, 4)}")
+            UI.Text(f"Last frame time(s): {round(time, 4)}")
+
             UI.Text(f"FPS: {round(1/time, 2)}")
+        
+        if imgui.collapsing_header("Simulation Params", flags=imgui.TREE_NODE_DEFAULT_OPEN)[0]:
+            self._particle_number, changed = UI.SliderInt("Particle Amount", self._particle_number, 0, 10000)
+            if changed:
+                self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient)
+            
+            self._particle_size, changed = UI.SliderFloat("Particle Size", self._particle_size, 0.005, 1.0)
+            if changed:
+                self._sim.SetParticleSize(self._particle_size)
+            
+            self._friction_coefficient, changed = UI.SliderFloat("Friction Coefficient", self._friction_coefficient, 0.005, 1.0)
+            if changed:
+                self._sim.SetFrictionCoefficient(self._friction_coefficient)
+        
+            #self._domain_size, changed = UI.SliderFloat3("Bound Size", self._domain_size, 0, 20.0)
+            #if changed:
+            #    self._sim.SetBoundSize(self._domain_size)
+        
+
                     
         UI.End()
         
