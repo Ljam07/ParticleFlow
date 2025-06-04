@@ -1,9 +1,21 @@
-21/05/2025 Week 4
-Create a basic window class and application class. This is designed so that it is clean, and modular instead of one whole messy file. 
+21/05/2025
+Created a basic window class and application class. This is designed so that it is clean and modular instead of one whole messy file.
 I next aim to further develop the core application next before moving onto the actual simulation algorithms.
 
 23/05/2025
-Refactored the core engine framework into clean, modular components. 
-Extracted the GLFW/OpenGL setup into a dedicated Window class that handles context creation, viewport resizing, buffer clearing, and event polling. 
-Implemented a generic Layer base class along with a LayerStack to manage ordered update, draw, and UI callbacks. 
+Refactored the core engine framework into clean, modular components.
+Extracted the GLFW/OpenGL setup into a dedicated Window class that handles context creation, viewport resizing, buffer clearing, and event polling.
+Implemented a generic Layer base class along with a LayerStack to manage ordered update, draw, and UI callbacks.
 Developed a complete Renderer class that compiles and links shaders, sets up VAOs/VBOs for a simple triangle, and issues draw calls.
+
+25/05/2025
+Finished developing the main engine, where the API allows for a simpler, and easier user experience in developing the simulation, which can also develop other 3D applications. Next, I will begin to develop the simulation part of the application.
+
+28/05/2025
+I began to create a scaffold of simulation classes, where i believe i will have to re-write it to make it more efficient and faster. Next, I will complete the scaffold and follow through with some testing.
+
+29/05/2025
+Created a basic particle spawning mechanism, where the points will spawn evenly within a cube. While it's not perfect, it's a start and might get back to it Later on, in development. Next, I want to implement basic movement and collisions with the bounding box.
+
+31/05/2025
+A basic simulation of particles bouncing off the bounding box in 2D was achieved. Next I want to be able to optimise and allow particle-to-particle collisions.
