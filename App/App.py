@@ -34,9 +34,11 @@ class ParticleFlowLayer(Layer):
 
         self._particle_size = 0.05
         self._domain_size = glm.vec3(3)
+        self._domain_list = [self._domain_size.x, self._domain_size.y, self._domain_size.z]
         self._friction_coefficient = 0.9
         self._particle_number = 100
-        self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient)
+        self._particle_spacing = self._particle_size/2
+        self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient, self._particle_spacing)
         
     def OnAttach(self):
         print("Attached Particle Flow Layer")
@@ -46,7 +48,11 @@ class ParticleFlowLayer(Layer):
         
         if not UI.IsHovered():
             self._camera.OnUpdate(self._window.GetWindow())
+            # Yo i think this is a pretty cool fix for dt being too big after creating particles
             self._sim.OnUpdate(dt.GetSeconds())
+            # if not self._sim.isFirst:
+            # else:
+            #     self._sim.isFirst = False
         self.shader.Use()
         self.shader.UploadMat4("uView", self._camera.GetViewMatrix())
         self.shader.UploadMat4("uProj", self._camera.GetProjectionMatrix())
@@ -62,9 +68,12 @@ class ParticleFlowLayer(Layer):
     def OnUI(self, dt: DeltaTime = None):
         UI.Begin("Settings")
         
-        reset = UI.Button("Reset")
+        reset = UI.Button("Reset Simulation")
         if reset:
-            self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient)
+                self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient, self._particle_spacing)
+        reset = UI.Button("Reset Camera")
+        if reset:
+                self._camera = Camera()
         
         # Show debug info if true
         if imgui.collapsing_header("Stats", flags=imgui.TREE_NODE_DEFAULT_OPEN)[0]:
@@ -76,13 +85,23 @@ class ParticleFlowLayer(Layer):
             UI.Text(f"FPS: {round(1/time, 2)}")
         
         if imgui.collapsing_header("Simulation Params", flags=imgui.TREE_NODE_DEFAULT_OPEN)[0]:
-            self._particle_number, changed = UI.SliderInt("Particle Amount", self._particle_number, 0, 10000)
-            if changed:
-                self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient)
+            self._particle_number, changed = UI.SliderInt("Particle Amount", self._particle_number, 1, 10000)
+            if changed:#imgui.is_item_deactivated_after_edit():
+                self._sim = Simulation(
+                    self._particle_number,
+                    self._particle_size,
+                    self._domain_size,
+                    self._friction_coefficient,
+                    self._particle_spacing
+                )
             
-            self._particle_size, changed = UI.SliderFloat("Particle Size", self._particle_size, 0.005, 1.0)
+            self._particle_size, changed = UI.SliderFloat("Particle Size", self._particle_size, 0.0005, 1.0)
             if changed:
                 self._sim.SetParticleSize(self._particle_size)
+                
+            self._particle_spacing, changed = UI.SliderFloat("Particle Spacing", self._particle_spacing, self._particle_size/2, 1.0)
+            if imgui.is_item_deactivated_after_edit():
+                self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient, self._particle_spacing)
             
             self._friction_coefficient, changed = UI.SliderFloat("Friction Coefficient", self._friction_coefficient, 0.005, 1.0)
             if changed:
@@ -91,6 +110,10 @@ class ParticleFlowLayer(Layer):
             #self._domain_size, changed = UI.SliderFloat3("Bound Size", self._domain_size, 0, 20.0)
             #if changed:
             #    self._sim.SetBoundSize(self._domain_size)
+            # changed, x, y, z = imgui.slider_float3("Bound Size", self._domain_size.x, self._domain_size.y, self._domain_size.z, change_speed=0.1)
+            # if imgui.is_item_deactivated_after_edit():
+            #     self._domain_size = glm.vec3(x, y, z)
+            #     self._sim.SetBoundSize(self._domain_size)
         
 
                     

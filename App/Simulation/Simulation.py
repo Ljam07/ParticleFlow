@@ -1,101 +1,141 @@
 import glm
+
 import math
 
-class Particle:
-    def __init__(self, position, particleSize, boundSize, frictionCoeficient):
-        self.gravity = glm.vec3(0, -9.8, 0)
-        self.position = position
-        self.velocity = glm.vec3(0)
-        self.ParticleSize = particleSize
-        self.boundSize = boundSize
-        self.color = glm.vec3(1)
-        self.frictionCoefficient = frictionCoeficient
-        
-    def OnUpdate(self, deltaTime: float):
-        self.velocity += self.gravity * deltaTime
-        self.position += self.velocity * deltaTime
-        self.CheckCollisions()
-    
-    def CheckCollisions(self):
-        halfBoundSize = self.boundSize/2 - glm.vec3(1) * (self.ParticleSize)
-        
-        if abs(self.position.x) > halfBoundSize.x:
-            self.position.x = halfBoundSize.x * glm.sign(self.position.x)
-            self.velocity.x *= -1 * self.frictionCoefficient
-        if abs(self.position.y) > halfBoundSize.y:
-            self.position.y = halfBoundSize.y * glm.sign(self.position.y)
-            self.velocity.y *= -1 * self.frictionCoefficient
-        
-        
 class Simulation:
-    def __init__(self, particleNum: int = 5, particleSize = 1, boundSize = glm.vec3(3), fCoefficient = 0.9, particleSpacing = None):
+    def __init__(self, particleNum: int = 5, particleSize = 1, boundSize = glm.vec3(3), fCoefficient = 0.7, particleSpacing = None):
         self.particleNumber = int(particleNum)
         self.particleSize = particleSize
         self.boundSize = boundSize
         self.frictionCoefficient = fCoefficient
+        self.gravity = glm.vec3(0)#glm.vec3(0, -9.8, 0)
         if particleSpacing == None:
             self.particleSpacing = self.particleSize/2
         else:
             self.particleSpacing = particleSpacing
-        self.particles = self.CreateParticles()
+            
+        self.smoothingRadius = 1.2
+        self.mass = 1
 
+        self.targetDensity = 2.75
+        self.pressureMultiplier = 5
+
+        self.CreateParticles()
+
+            
+    def ConvertDensityToPressure(self, density):
+        densityError = density - self.targetDensity
+        pressure = densityError * self.pressureMultiplier
+        return pressure
+        
     def CreateParticles(self):
-        particles = []
-        if self.particleNumber <= 0:
-            return particles
-        particlesPerRow = max(int(self.particleNumber ** (1/2)), 1)
-        particlesPerColumn = (self.particleNumber - 1) / particlesPerRow + 1
-        spacing = self.particleSize * 2 + self.particleSpacing
+        self.positions   = [glm.vec3(0.0) for _ in range(self.particleNumber)]
+        self.velocities  = [glm.vec3(0.0) for _ in range(self.particleNumber)]
+        self.properties = [0.0 for _ in range(self.particleNumber)]
+        self.densities  = [0.0 for _ in range(self.particleNumber)]
+        
+        pprow = int(glm.sqrt(self.particleNumber))
+        ppcol = (self.particleNumber - 1) / pprow + 1
         
         for i in range(self.particleNumber):
-            pos = glm.vec3((i % particlesPerRow - particlesPerRow / 2 + 0.5) * spacing, \
-                (i / particlesPerRow - particlesPerColumn / 2 + 0.5) * spacing, 0)
-            particles.append(Particle(pos, self.particleSize, self.boundSize, self.frictionCoefficient))
+            x = (i % pprow - pprow / 2 + 0.5) * self.particleSpacing
+            y = (i / pprow - ppcol / 2 + 0.5) * self.particleSpacing
+            self.positions[i] = glm.vec3(x, y, 0)
 
-        return particles
+                
+    def Collisions(self, i):
+        halfBoundSize = glm.vec3(self.boundSize / 2 - glm.vec3(1) * self.particleSize)
+        
+        if abs(self.positions[i].x) > halfBoundSize.x:
+            self.positions[i].x = halfBoundSize.x * glm.sign(self.positions[i].x)
+            self.velocities[i].x *= -1 * self.frictionCoefficient
+        if abs(self.positions[i].y) > halfBoundSize.y:
+            self.positions[i].y = halfBoundSize.y * glm.sign(self.positions[i].y)
+            self.velocities[i].y *= -1 * self.frictionCoefficient
     
-    def SmoothKernel(self, radius, dist) -> float:
-        value = max(0, radius * radius - dist * dist)
-        return value
+    def OnUpdate(self, dt: float):
+        for i in range(len(self.positions)):
+            #
+            self.velocities[i] += self.gravity * dt
+            self.densities[i] = self.CalculateDensity(self.positions[i])
+            
+            #
+            pressureForce = self.CalculatePressureForce(self.positions[i])
+            acceleration = pressureForce / self.densities[i]
+            self.velocities[i] += acceleration * dt
+            
+            #
+            self.positions[i] += self.velocities[i] * dt
+            self.Collisions(i)
+            
+    def SmoothingKernel(self, radius, dist: float):
+        if dist >= radius:
+            return 0.0
+        volume     = (math.pi * pow(radius, 4)) / 6
+        return (radius - dist) * (radius - dist) / volume
+    
+    def SmoothingKernelDerivative(self, radius, dist):
+        if dist >= radius:
+            return 0
+        scale = 12 / (pow(radius, 4) * math.pi)
+        return (dist - radius) * scale
     
     def CalculateDensity(self, point: glm.vec3):
         density = 0
-        mass = 1
         
-        for particle in self.particles:
-            dist = glm.length(particle.position - point)
-            influence = self.SmoothKernel(0.5, dist)
-            density += mass * influence
-        
+        for position in self.positions:
+            dist = glm.length(position - point)
+            influence = self.SmoothingKernel(self.smoothingRadius, dist)
+            density += self.mass * influence
         return density
-
-    def OnUpdate(self, dt: float):
-        for particle in self.particles:
-            particle.OnUpdate(dt)
+    
+    def CalculateProperty(self, point: glm.vec3):
+        property = 0
+        
+        for i in range(self.particleNumber):
+            dist = glm.length(self.positions[i] - point)
+            influence = self.SmoothingKernel(self.smoothingRadius, dist)
+            density = self.densities[i]
+            property += self.properties[i] * influence * self.mass / density
+        return property
+            
+    def CalculatePressureForce(self, point: glm.vec3):
+        pressureForce = glm.vec3(0)
+        
+        for i in range(self.particleNumber):
+            dist = glm.length(self.positions[i] - point)
+            if dist == 0:
+                continue
+            direction = (self.positions[i] - point) / dist
+            slope = self.SmoothingKernelDerivative(self.smoothingRadius, dist)
+            density = self.densities[i]
+            if density == 0.0 or dist == 0.0:
+                continue
+            pressureForce += self.ConvertDensityToPressure(density) * direction * slope * self.mass / density
+            
+        return pressureForce
+    
+    def UpdateDensities(self):
+        for i in range(self.particleNumber):
+            self.densities[i] = self.CalculateDensity(self.positions[i])
+    
+    ## ACCESSED OUT OF CLASS
 
     def GetPoints(self) -> list[glm.vec3]:
-        positions = [p.position for p in self.particles]
-        return positions
+        return self.positions
 
     def GetColors(self) -> list[glm.vec3]:
-        colors = [p.color for p in self.particles]
+        colors = [glm.vec3(1)] * len(self.positions)
         return colors
     
     def SetParticleSize(self, size: float):
-        for particle in self.particles:
-            particle.particleSize = size
         self.particleSize = size
     
     def SetGravity(self, gravity: glm.vec3):
-        for particle in self.particles:
-            particle.gravity = gravity
+        self.gravity = gravity
     
     def SetBoundSize(self, bounds: glm.vec3):
         self.boundSize = bounds
-        for particle in self.particles:
-            particle.boundSize = bounds
         
     def SetFrictionCoefficient(self, m: float):
         self.frictionCoefficient = m
-        for particle in self.particles:
-            particle.frictionCoefficient = m
