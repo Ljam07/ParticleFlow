@@ -35,7 +35,7 @@ class ParticleFlowLayer(Layer):
         self._particle_size = 0.05
         self._domain_size = glm.vec3(3)
         self._domain_list = [self._domain_size.x, self._domain_size.y, self._domain_size.z]
-        self._friction_coefficient = 0.9
+        self._friction_coefficient = 0.7
         self._particle_number = 100
         self._particle_spacing = self._particle_size/2
         self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient, self._particle_spacing)
@@ -45,14 +45,20 @@ class ParticleFlowLayer(Layer):
 
     def OnUpdate(self, dt: DeltaTime):
         #Actual application code here
+        dt = dt.GetSeconds()
         
+        # To stop the program from going unpredictable under low framerates we limit highest dt to ensure smooth sim        
+        minDt = 1/60
+        if dt > minDt:
+            dt = minDt
+         
         if not UI.IsHovered():
             self._camera.OnUpdate(self._window.GetWindow())
             # Yo i think this is a pretty cool fix for dt being too big after creating particles
-            self._sim.OnUpdate(dt.GetSeconds())
-            # if not self._sim.isFirst:
-            # else:
-            #     self._sim.isFirst = False
+            if not self._sim.isFirst:
+                self._sim.OnUpdate(dt)
+            else:
+                self._sim.isFirst = False
         self.shader.Use()
         self.shader.UploadMat4("uView", self._camera.GetViewMatrix())
         self.shader.UploadMat4("uProj", self._camera.GetProjectionMatrix())
@@ -98,6 +104,7 @@ class ParticleFlowLayer(Layer):
             self._particle_size, changed = UI.SliderFloat("Particle Size", self._particle_size, 0.0005, 1.0)
             if changed:
                 self._sim.SetParticleSize(self._particle_size)
+                self._sim.SetOptimalSmoothingRadius()
                 
             self._particle_spacing, changed = UI.SliderFloat("Particle Spacing", self._particle_spacing, self._particle_size/2, 1.0)
             if imgui.is_item_deactivated_after_edit():
