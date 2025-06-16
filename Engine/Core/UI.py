@@ -51,8 +51,8 @@ class UI:
         return new_val, changed
 
     @staticmethod
-    def SliderFloat3(label: str, vec3: list[float], min_value: float, max_value: float):
-        changed, new_val = imgui.slider_float3(label, vec3, min_value, max_value)
+    def SliderFloat3(label: str, value: list[float], min_value: float, max_value: float):
+        changed, new_val = imgui.slider_float3(label, value[0], value[1], value[2], min_value, max_value)
         return new_val, changed
 
     @staticmethod

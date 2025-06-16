@@ -38,7 +38,8 @@ class ParticleFlowLayer(Layer):
         self._friction_coefficient = 0.7
         self._particle_number = 100
         self._particle_spacing = self._particle_size/2
-        self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient, self._particle_spacing)
+        self._gravity = True
+        self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient, self._particle_spacing, glm.vec3(0, -9.8, 0))
         
     def OnAttach(self):
         print("Attached Particle Flow Layer")
@@ -74,9 +75,21 @@ class ParticleFlowLayer(Layer):
     def OnUI(self, dt: DeltaTime = None):
         UI.Begin("Settings")
         
+        if self._gravity:
+            gravity = glm.vec3(0, -9.8, 0)
+        else:
+            gravity = glm.vec3()
+        
         reset = UI.Button("Reset Simulation")
         if reset:
-                self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient, self._particle_spacing)
+            self._sim = Simulation(
+                    self._particle_number,
+                    self._particle_size,
+                    self._domain_size,
+                    self._friction_coefficient,
+                    self._particle_spacing,
+                    gravity
+                )
         reset = UI.Button("Reset Camera")
         if reset:
                 self._camera = Camera()
@@ -98,8 +111,16 @@ class ParticleFlowLayer(Layer):
                     self._particle_size,
                     self._domain_size,
                     self._friction_coefficient,
-                    self._particle_spacing
+                    self._particle_spacing,
+                    gravity
                 )
+                
+            self._gravity, changed = UI.Checkbox("Gravity", self._gravity)
+            if changed:
+                if self._gravity:
+                    self._sim.SetGravity(glm.vec3(0, -9.8, 0))
+                else:
+                    self._sim.SetGravity(glm.vec3(0, 0, 0))
             
             self._particle_size, changed = UI.SliderFloat("Particle Size", self._particle_size, 0.0005, 1.0)
             if changed:
@@ -108,11 +129,23 @@ class ParticleFlowLayer(Layer):
                 
             self._particle_spacing, changed = UI.SliderFloat("Particle Spacing", self._particle_spacing, self._particle_size/2, 1.0)
             if imgui.is_item_deactivated_after_edit():
-                self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient, self._particle_spacing)
+                self._sim = Simulation(
+                    self._particle_number,
+                    self._particle_size,
+                    self._domain_size,
+                    self._friction_coefficient,
+                    self._particle_spacing,
+                    gravity
+                )
             
             self._friction_coefficient, changed = UI.SliderFloat("Friction Coefficient", self._friction_coefficient, 0.005, 1.0)
             if changed:
                 self._sim.SetFrictionCoefficient(self._friction_coefficient)
+            
+            self._domain_size, changed = UI.SliderFloat3("Domain Size", self._domain_size, 0.1, 20.0)
+            if changed:
+                self._sim.SetBoundSize(self._domain_size)
+                self._sim.SetOptimalSmoothingRadius()
         
             #self._domain_size, changed = UI.SliderFloat3("Bound Size", self._domain_size, 0, 20.0)
             #if changed:
