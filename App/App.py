@@ -27,6 +27,7 @@ class ParticleFlowLayer(Layer):
                       
         self.shader: Shader = Shader("App/Shaders/Particle.vert", "App/Shaders/Particle.frag")
 
+        # Look at this hunk of garbage
         self.mesh   = Mesh(Mesh.GenerateUVSphere(6, 12, 1))
         self._renderer = Renderer(self.shader, self.mesh)
         
@@ -38,8 +39,8 @@ class ParticleFlowLayer(Layer):
         self._friction_coefficient = 0.7
         self._particle_number = 100
         self._particle_spacing = self._particle_size/2
-        self._gravity = True
-        self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient, self._particle_spacing, glm.vec3(0, -9.8, 0))
+        self._gravity = False
+        self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient, self._particle_spacing, glm.vec3(0, 0, 0))
         
     def OnAttach(self):
         print("Attached Particle Flow Layer")
