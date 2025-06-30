@@ -1,3 +1,4 @@
+"""To be overriden by inheriting class"""
 class Layer:
     """
     Base class for all layers in the application.

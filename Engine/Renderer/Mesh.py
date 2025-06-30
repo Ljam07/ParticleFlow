@@ -25,9 +25,6 @@ class Mesh:
     
     def Unbind(self): 
         self.vao.Unbind()
-    
-    def __del__(self): 
-        del self.vbo; del self.vao
         
     def SetInstanceData(self,
                     points: list[glm.vec3],
@@ -93,6 +90,8 @@ class Mesh:
         stacks: number of horizontal rings (latitude)
         slices: number of vertical segments (longitude)
         radius: sphere radius
+        
+        Takes math inspiration from https://www.songho.ca/opengl/gl_sphere.html
         """
         vertices = []
         # Precompute sin/cos of the angles

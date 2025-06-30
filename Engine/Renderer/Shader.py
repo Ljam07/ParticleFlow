@@ -1,6 +1,5 @@
 from OpenGL.GL import *
 from glm import value_ptr
-import ctypes
 import os
 
 class Shader:
@@ -64,10 +63,10 @@ class Shader:
         if loc != -1:
             glUniform1f(loc, value)
 
-    def UploadVec3(self, name: str, vec3):
+    def UploadVec3(self, name: str, value):
         loc = glGetUniformLocation(self.handle, name)
         if loc != -1:
-            glUniform3f(loc, vec3[0], vec3[1], vec3[2])
+            glUniform3f(loc, value[0], value[1], value[2])
 
     def UploadMat4(self, name: str, mat, transpose=False):
         loc = glGetUniformLocation(self.handle, name)
@@ -81,4 +80,4 @@ class Shader:
         try:
             glDeleteProgram(self.handle)
         except Exception:
-            pass
+            print("Failed to delete program, hopefully garbage collection will deal with it! GL!  (DW it will)")

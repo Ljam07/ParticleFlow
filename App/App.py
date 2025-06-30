@@ -25,22 +25,22 @@ class ParticleFlowLayer(Layer):
         self._camera = Camera(aspect=window.GetWidth()/window.GetHeight())
         self._window = window
                       
-        self.shader: Shader = Shader("App/Shaders/Particle.vert", "App/Shaders/Particle.frag")
+        self._shader: Shader = Shader("App/Shaders/Particle.vert", "App/Shaders/Particle.frag")
 
         # Look at this hunk of garbage
-        self.mesh   = Mesh(Mesh.GenerateUVSphere(6, 12, 1))
-        self._renderer = Renderer(self.shader, self.mesh)
+        self._mesh   = Mesh(Mesh.GenerateUVSphere(6, 12, 1))
+        self._renderer = Renderer(self._shader, self._mesh)
         
         self._camera = Camera()
 
         self._particle_size = 0.05
         self._domain_size = glm.vec3(3)
-        self._domain_list = [self._domain_size.x, self._domain_size.y, self._domain_size.z]
         self._friction_coefficient = 0.7
         self._particle_number = 100
         self._particle_spacing = self._particle_size/2
         self._gravity = False
         self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient, self._particle_spacing, glm.vec3(0, 0, 0))
+        self._minDt = 1/60
         
     def OnAttach(self):
         print("Attached Particle Flow Layer")
@@ -50,24 +50,20 @@ class ParticleFlowLayer(Layer):
         dt = dt.GetSeconds()
         
         # To stop the program from going unpredictable under low framerates we limit highest dt to ensure smooth sim        
-        minDt = 1/60
-        if dt > minDt:
-            dt = minDt
+        dt = self._minDt
          
         if not UI.IsHovered():
             self._camera.OnUpdate(self._window.GetWindow())
             # Yo i think this is a pretty cool fix for dt being too big after creating particles
-            if not self._sim.isFirst:
-                self._sim.OnUpdate(dt)
-            else:
-                self._sim.isFirst = False
-        self.shader.Use()
-        self.shader.UploadMat4("uView", self._camera.GetViewMatrix())
-        self.shader.UploadMat4("uProj", self._camera.GetProjectionMatrix())
-        self.shader.UploadFloat("uParticleRadii", self._particle_size)
+            self._sim.OnUpdate(dt)
+
+        self._shader.Use()
+        self._shader.UploadMat4("uView", self._camera.GetViewMatrix())
+        self._shader.UploadMat4("uProj", self._camera.GetProjectionMatrix())
+        self._shader.UploadFloat("uParticleRadii", self._particle_size)
         
         # 2nd largest inefficiency
-        self.mesh.SetInstanceData(self._sim.GetPoints(), self._sim.GetColors())
+        self._mesh.SetInstanceData(self._sim.GetPoints(), self._sim.GetColors())
         self._renderer.DrawInstanced()
         # largest inefficiency
         
