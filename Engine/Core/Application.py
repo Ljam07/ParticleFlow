@@ -25,12 +25,22 @@ class Application:
     def Run(self):
         print("Created Application") 
         self._ui.InitUI(self._window.GetWindow())
+        
+        fps_cap = 60.0
+        dt = 1.0 / fps_cap
+        last_update_time = 0.0
+        
         while self._window.WindowOpen() and self._Running:
             time = glfw.get_time()
             deltaTime = DeltaTime(time - self._last_frame_time)
             self._last_frame_time = time
 
-
+            # if last_update_time < dt:
+            #     last_update_time += deltaTime.GetSeconds()
+            #     continue
+# 
+            # tDt = DeltaTime(dt)
+            
             # clear + buffer swap
             self._window.Clear()
             # update layers if any

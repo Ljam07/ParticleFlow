@@ -75,9 +75,3 @@ class Shader:
         # convert glm.mat4 to float* via value_ptr
         ptr = value_ptr(mat)
         glUniformMatrix4fv(loc, 1, GL_TRUE if transpose else GL_FALSE, ptr)
-
-    def __del__(self):
-        try:
-            glDeleteProgram(self.handle)
-        except Exception:
-            print("Failed to delete program, hopefully garbage collection will deal with it! GL!  (DW it will)")

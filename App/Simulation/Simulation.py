@@ -3,254 +3,302 @@ import glm
 import math
 import random
 
+import copy
+
+class Cell:
+    def __init__(self):
+        # contains a list of particle IDs
+        self.particles: list[int] = []
+    
+    def AddParticle(self, particleId):
+        self.particles.append(particleId)
+    
+    def RemoveParticle(self, particleId):
+        self.particles.remove(particleId)
+    
+    def Clear(self):
+        self.particles.clear()
+        
+    def IsEmpty(self):
+        if len(self.particles) == 0:
+            return True
+        return False
+    
+    def GetParticles(self):
+        return self.particles
+
 class Simulation:
-    def __init__(self, particleNumber, particleSize, boundSize, frictionCoefficient, particleSpacing, gravity):
+    def __init__(self, particleNumber, particleSize, boundSize, frictionCoefficient):
         # Ensure boundSize is always a glm.vec3
         if not isinstance(boundSize, glm.vec3):
             boundSize = glm.vec3(*boundSize)
         self._bound_size = boundSize
         self._particle_number = int(particleNumber)
-        self._particle_size = particleSize
+        self._particle_radius = particleSize / 2
 
         self._friction_coefficient = frictionCoefficient
-        self._gravity = gravity
-        if particleSpacing is None:
-            self._particle_spacing = self._particle_size / 2
-        else:
-            self._particle_spacing = particleSpacing
+        self._velocity_damping = 40.0
+        self._gravity = glm.vec3(0, -2.8, 0)
+        
+        self._positions: list[glm.vec3] = []
+        self._velocities: list[glm.vec3] = []
+        self._colors:     list[glm.vec3] = []
 
-        self._smoothing_radius = 1.2
-        self.SetOptimalSmoothingRadius()
-        self._mass = 1
 
-        self._target_density = 2.75
-        self._pressure_multiplier = 2
+        self._initial_particle_velocity = glm.vec3(0.2, 2, 0)
+        self._emitter_position = glm.vec3(0, 0, 0)
+        self._emission_rate = 10
+        self._emission_interval = 1 / self._emission_rate  # particles per second
+        
+        self.ttl_particles = 0.0
 
-        self.CreateParticles()
-
-    def SetOptimalSmoothingRadius(self,
-                                  useParticleSize: float = None,
-                                  AC_ratio: float = 64.0):
-        """
-        Convenience: set self.smoothingRadius = h_opt based on given particleSize.
-        If useParticleSize is None, uses self.particleSize.
-        """
-        if useParticleSize is None:
-            useParticleSize = self._particle_size
-        self._smoothing_radius = (AC_ratio ** (1.0 / 6.0)) * useParticleSize
-
-    def ConvertDensityToPressure(self, density):
-        densityError = density - self._target_density
-        pressure = densityError * self._pressure_multiplier
-        return pressure
-
-    def CreateParticles(self):
-        # Distribute in a 3D grid within the bounding box
-        self._positions = []
-        self._velocities = []
-        self._properties = []
-        self._densities = []
-
-        # determine grid counts per axis (approx. cube root)
-        count = self._particle_number
-        nx = int(round(count ** (1/3)))
-        ny = nx
-        nz = nx
-        # adjust if too few
-        while nx * ny * nz < count:
-            nx += 1
-            if nx * ny * nz >= count:
-                break
-            ny += 1
-            if nx * ny * nz >= count:
-                break
-            nz += 1
-
-        idx = 0
-        offset = glm.vec3(self._particle_spacing)
-        start = glm.vec3(- (nx-1) * self._particle_spacing / 2,
-                         - (ny-1) * self._particle_spacing / 2,
-                         - (nz-1) * self._particle_spacing / 2)
-        for i in range(nx):
-            for j in range(ny):
-                for k in range(nz):
-                    if idx >= count:
-                        break
-                    pos = start + glm.vec3(i * self._particle_spacing,
-                                             j * self._particle_spacing,
-                                             k * self._particle_spacing)
-                    self._positions.append(pos)
-                    self._velocities.append(glm.vec3(0.0))
-                    self._properties.append(0.0)
-                    self._densities.append(0.0)
-                    idx += 1
-                if idx >= count:
-                    break
-            if idx >= count:
-                break
-
-    def Collisions(self, i):
-        halfBoundSize = glm.vec3(self._bound_size / 2 - glm.vec3(1) * self._particle_size)
-       
-        if abs(self._positions[i].x) > halfBoundSize.x:
-            self._positions[i].x = halfBoundSize.x * glm.sign(self._positions[i].x)
-            self._velocities[i].x *= -1 * self._friction_coefficient
-        if abs(self._positions[i].y) > halfBoundSize.y:
-            self._positions[i].y = halfBoundSize.y * glm.sign(self._positions[i].y)
-            self._velocities[i].y *= -1 * self._friction_coefficient
-        if abs(self._positions[i].z) > halfBoundSize.z:
-            self._positions[i].z = halfBoundSize.z * glm.sign(self._positions[i].z)
-            self._velocities[i].z *= -1 * self._friction_coefficient
-   
-    def OnUpdate(self, dt: float):
-        self.BuildSpatialMap()
-        for i in range(len(self._positions)):
-            # apply gravity
-            self._velocities[i] += self._gravity * dt
-            self._densities[i] = self.CalculateDensity(i)
-
-            # pressure force
-            pressureForce = self.CalculatePressureForce(i)
-            # Prevent division by zero
-            denom = self._densities[i] if abs(self._densities[i]) > 1e-8 else 1.0
-            acceleration = pressureForce / denom
-            self._velocities[i] += acceleration * dt
-
-            # integrate
-            self._positions[i] += self._velocities[i] * dt
-            self.Collisions(i)
-
-    def SmoothingKernel(self, radius, dist: float):
-        if dist >= radius:
-            return 0.0
-        volume = (math.pi * pow(radius, 4)) / 6
-        return (radius - dist) * (radius - dist) / volume
-
-    def SmoothingKernelDerivative(self, radius, dist):
-        if dist >= radius:
-            return 0
-        scale = 12 / (pow(radius, 4) * math.pi)
-        return (dist - radius) * scale
-
-    def CalculateDensity(self, index: int):
-        density = 0.0
-        point = self._positions[index]
-        cx, cy, cz = self.GetCellIndex(point)
-
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                for dz in (-1, 0, 1):
-                    nx = cx + dx
-                    ny = cy + dy
-                    nz = cz + dz
-                    if not (0 <= nx < len(self.grid)
-                            and 0 <= ny < len(self.grid[0])
-                            and 0 <= nz < len(self.grid[0][0])):
-                        continue
-                    for j in self.grid[nx][ny][nz]:
-                        dist = glm.length(self._positions[j] - point)
-                        influence = self.SmoothingKernel(self._smoothing_radius, dist)
-                        density += self._mass * influence
-        return density
-
-    def CalculateProperty(self, point: glm.vec3):
-        prop = 0.0
-        for i in range(self._particle_number):
-            dist = glm.length(self._positions[i] - point)
-            influence = self.SmoothingKernel(self._smoothing_radius, dist)
-            prop += self._properties[i] * influence * self._mass / self._densities[i]
-        return prop
-
-    def CalculatePressureForce(self, i: int):
-        """ Inspired from Sebastian Lague's """
-        force = glm.vec3(0)
-        pi = self._positions[i]
-        rho_i = self._densities[i]
-        cx, cy, cz = self.GetCellIndex(pi)
-
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                for dz in (-1, 0, 1):
-                    nx = cx + dx
-                    ny = cy + dy
-                    nz = cz + dz
-                    if not (0 <= nx < len(self.grid)
-                            and 0 <= ny < len(self.grid[0])
-                            and 0 <= nz < len(self.grid[0][0])):
-                        continue
-                    for j in self.grid[nx][ny][nz]:
-                        if j == i:
-                            continue
-                        pj = self._positions[j]
-                        rho_j = self._densities[j]
-                        if rho_j == 0:
-                            continue
-                        r = pj - pi
-                        dist = glm.length(r)
-                        if dist == 0:
-                            continue
-                        dir = r / dist
-                        slope = self.SmoothingKernelDerivative(self._smoothing_radius, dist)
-                        shared_pressure = self.CalculateAveragePressure(rho_j, rho_i)
-                        force += shared_pressure * dir * slope * self._mass / rho_j
-        return force
-
-    def CalculateAveragePressure(self, dA, dB):
-        pressureA = self.ConvertDensityToPressure(dA)
-        pressureB = self.ConvertDensityToPressure(dB)
-        return (pressureA + pressureB) / 2
-
-    def UpdateDensities(self):
-        for i in range(self._particle_number):
-            self._densities[i] = self.CalculateDensity(i)
-
-    def BuildSpatialMap(self):
-        self.cellSize = self._smoothing_radius * 2
-        # Fix: ensure cellSize is always positive and not NaN
-        if not isinstance(self.cellSize, float) or self.cellSize <= 0 or math.isnan(self.cellSize):
-            self.cellSize = 1e-6
-        # compute grid dims
-        nx = int(self._bound_size.x // self.cellSize) + 1
-        ny = int(self._bound_size.y // self.cellSize) + 1
-        nz = int(self._bound_size.z // self.cellSize) + 1
-        # initialise 3D list
-        self.grid = [
-            [ [ [] for _ in range(nz) ] for _ in range(ny) ]
-            for _ in range(nx)
+        self._cell_size = self._particle_radius * 12 # self.CalculateOptimalCellSize() # self._particle_radius * 6
+        self._cell_count = glm.vec3(
+            int(math.ceil(self._bound_size.x // self._cell_size)),
+            int(math.ceil(self._bound_size.y // self._cell_size)),
+            int(math.ceil(self._bound_size.z // self._cell_size))
+        )
+        
+        self._grid_template = [
+            [
+                [Cell() for _ in range(int(self._cell_count.z))]
+                for _ in range(int(self._cell_count.y))
+            ]
+            for _ in range(int(self._cell_count.x))
         ]
-        # populate
+
+        # initialise grid and particle‐cell list correctly
+        self._grid = copy.deepcopy(self._grid_template)
+        self._has_particles: list[glm.vec3] = []
+        
+        self._neighbour_offsets = [
+            glm.vec3(dx, dy, dz)
+            for dx in (-1, 0, 1)
+            for dy in (-1, 0, 1)
+            for dz in (-1, 0, 1)
+            if not (dx == 0 and dy == 0 and dz == 0)
+        ]
+
+    def CalculateOptimalCellSize(self, scale: float = 1.5) -> float:
+        """
+        Calculate an optimal cell size for spatial hashing based on particle radius.
+        The scale factor adjusts how much larger the cell is than the particle collision range.
+        """
+        return 2.0 * self._particle_radius * scale
+
+        
+    def OnUpdate(self, dt: float):
+        """
+        Update the simulation state for a single timestep.
+        This method should be called at a fixed interval.
+        """
+        # if len(self._positions) > 0:
+        #    print(self._positions[0])
+        
+        if len(self._positions) < self._particle_number and self.ttl_particles > self._emission_interval:
+            self.AddParticle(self._emitter_position)
+            self.ttl_particles = 0
+        else:
+            self.ttl_particles += dt
+                
+        # Update particle positions, velocities, etc. here
+        substep = 2
+        substep_size = dt / substep
+        for _ in range(substep):
+            self.OnUpdateSubstep(substep_size)
+            
+    def AddParticle(self, position: glm.vec3, velocity: glm.vec3 = None):
+        """
+        Add a new particle to the simulation at the specified position.
+        If no velocity is provided, it defaults to the initial particle velocity.
+        """
+
+        v = glm.vec3(self._initial_particle_velocity.x, self._initial_particle_velocity.y, self._initial_particle_velocity.z)
+            
+        spawn_pos = glm.vec3(position.x, position.y, position.z)
+        
+        self._positions.append(spawn_pos)
+        self._velocities.append(v)
+        col = glm.vec3(
+            random.uniform(0.0, 1.0),
+            random.uniform(0.0, 1.0),
+            random.uniform(0.0, 1.0)
+            )
+        self._colors.append(col)
+    
+    def OnUpdateSubstep(self, dt: float):
+        for i in range(len(self._positions)):
+            self._velocities[i] += self._gravity * dt
+        
+        # Update positions
+        for i in range(len(self._positions)):
+            self._positions[i] += self._velocities[i] * dt
+        
+        # Handle collisions
+        for i in range(len(self._positions)):
+            self.CheckWallCollisions(i)
+        
+        # self.FindCollisions()
+        self.CreateGrid()
+        
+
+
+    def FindCollisions(self):
+        """
+        Find and resolve collisions between particles.
+        This method should be called after updating particle positions.
+        """
+        
+        for i in range(len(self._positions)):
+            for j in range(i+1, len(self._positions)):
+                if self.IsColliding(i, j):
+                    self.ResolveCollision(i, j)
+            self.CheckWallCollisions(i)
+                
+    def CheckWallCollisions(self, i: int):
+        """
+        Check if a particle is colliding with the walls of the simulation bounds.
+        If it is, adjust its position to keep it within bounds.
+        """
+       
+        half    = self._bound_size * 0.5
+        limit_x = half.x - self._particle_radius
+        limit_y = half.y - self._particle_radius
+        limit_z = half.z - self._particle_radius
+
+        # X axis
+        if   self._positions[i].x >  limit_x:
+            self._positions[i].x  =  limit_x
+            self._velocities[i].x *= -self._friction_coefficient
+        elif self._positions[i].x < -limit_x:
+            self._positions[i].x  = -limit_x
+            self._velocities[i].x *= -self._friction_coefficient
+
+        # Y axis
+        if   self._positions[i].y >  limit_y:
+            self._positions[i].y  =  limit_y
+            self._velocities[i].y *= -self._friction_coefficient
+        elif self._positions[i].y < -limit_y:
+            self._positions[i].y  = -limit_y
+            self._velocities[i].y *= -0.8
+
+        # Z axis
+        if   self._positions[i].z >  limit_z:
+            self._positions[i].z  =  limit_z
+            self._velocities[i].z *= -self._friction_coefficient
+        elif self._positions[i].z < -limit_z:
+            self._positions[i].z  = -limit_z
+            self._velocities[i].z *= -self._friction_coefficient
+
+
+    def IsColliding(self, p1: int, p2: int) -> bool:
+        """
+        Check if two particles are colliding based on their positions.
+        """
+        distance = glm.distance(self._positions[p1], self._positions[p2])
+        #print(f"Distance between particles {p1} and {p2}: {distance}")
+        return distance < 2 * self._particle_radius
+    
+    def ResolveCollision(self, p1: int, p2: int):
+        """
+        Resolve a collision between two particles by adjusting their positions.
+        This is a simple elastic collision resolution.
+        """
+        point1 = self._positions[p1]
+        point2 = self._positions[p2]
+        mass = 1.0
+
+        impact_vector = point2 - point1
+        d = glm.length(impact_vector)
+
+        if d < 1e-5:
+            return
+
+        if d < self._particle_radius * 2:
+            overlap = d - (self._particle_radius * 2)
+            dir = glm.normalize(impact_vector) * (overlap * 0.5)
+            self._positions[p1] += dir
+            self._positions[p2] -= dir
+            d = self._particle_radius * 2
+            impact_vector = glm.normalize(impact_vector) * d  # Correct impact vector
+
+        mSum = mass + mass
+        vDiff = self._velocities[p2] - self._velocities[p1]
+
+        num = glm.dot(vDiff, impact_vector)
+        den = mSum * d * d
+
+        dVa = impact_vector * (2 * mass * num / den)
+        self._velocities[p1] += dVa
+
+        dVb = impact_vector * (-2 * mass * num / den)
+        self._velocities[p2] += dVb
+
+    def CreateGrid(self):
+        self._grid = copy.deepcopy(self._grid_template)
+
         for idx, pos in enumerate(self._positions):
             cx, cy, cz = self.GetCellIndex(pos)
-            # Clamp indices to grid bounds
-            cx = max(0, min(cx, nx-1))
-            cy = max(0, min(cy, ny-1))
-            cz = max(0, min(cz, nz-1))
-            self.grid[cx][cy][cz].append(idx)
+            if not (0 <= cx < self._cell_count.x and
+                    0 <= cy < self._cell_count.y and
+                    0 <= cz < self._cell_count.z):
+                continue
+            self._grid[cx][cy][cz].AddParticle(idx)
 
-    def GetCellIndex(self, position):
-        # Defensive: avoid NaN/zero cellSize
-        if not hasattr(self, 'cellSize') or self.cellSize == 0 or math.isnan(self.cellSize):
-            return (0, 0, 0)
-        cell_x = int((position.x + self._bound_size.x / 2) // self.cellSize)
-        cell_y = int((position.y + self._bound_size.y / 2) // self.cellSize)
-        cell_z = int((position.z + self._bound_size.z / 2) // self.cellSize)
-        return (cell_x, cell_y, cell_z)
+        # no _has_particles, so loop over all cells instead
+        for x in range(int(self._cell_count.x)):
+            for y in range(int(self._cell_count.y)):
+                for z in range(int(self._cell_count.z)):
+                    if not self._grid[x][y][z].IsEmpty():
+                        self.CheckNeighboringCells(x, y, z)
 
+        
+    def CheckNeighboringCells(self, cx: int, cy: int, cz: int):
+        particles = self._grid[cx][cy][cz].GetParticles()
+        cellListSize = len(particles)
 
-    ## ACCESSED OUT OF CLASS
+        for i in range(cellListSize):
+            p1 = particles[i]
+            for j in range(i + 1, cellListSize):
+                p2 = particles[j]
+                if self.IsColliding(p1, p2):
+                    self.ResolveCollision(p1, p2)
+            self.CheckWallCollisions(p1)
 
+        for offset in self._neighbour_offsets:
+            nx, ny, nz = cx + int(offset.x), cy + int(offset.y), cz + int(offset.z)
+            if not (0 <= nx < self._cell_count.x and
+                    0 <= ny < self._cell_count.y and
+                    0 <= nz < self._cell_count.z):
+                continue
+
+            for p1 in particles:
+                for p2 in self._grid[nx][ny][nz].GetParticles():
+                    if self.IsColliding(p1, p2):
+                        self.ResolveCollision(p1, p2)
+ 
+                           
+    def GetCellIndex(self, position: glm.vec3) -> glm.vec3:
+        """
+        Get the grid cell index for a given position.
+        """
+        cell_x = int((position.x + self._bound_size.x * 0.5) / self._cell_size)
+        cell_y = int((position.y + self._bound_size.y * 0.5) / self._cell_size)
+        cell_z = int((position.z + self._bound_size.z * 0.5) / self._cell_size)
+        
+        return cell_x, cell_y, cell_z
+        
+                    
+                    
+    ## ACCESSED OUT OF CLASS    
     def GetPoints(self) -> list[glm.vec3]:
         return self._positions
 
     def GetColors(self) -> list[glm.vec3]:
-        colors = [glm.vec3(1)] * len(self._positions)
-        return colors
+        return self._colors
 
     def SetParticleSize(self, size: float):
-        self._particle_size = size
-
-    def SetGravity(self, gravity: glm.vec3):
-        self._gravity = gravity
+        self._particle_radius = size
 
     def SetBoundSize(self, boundSize):
         if not isinstance(boundSize, glm.vec3):
@@ -260,8 +308,5 @@ class Simulation:
     def SetFrictionCoefficient(self, m: float):
         self._friction_coefficient = m
 
-    def SetPressureMultiplier(self, multiplier: float):
-        self._pressure_multiplier = multiplier
-
-    def SetGravity(self, gravity: glm.vec3):
-        self._gravity = gravity
+    def GetParticleCount(self) -> int:
+        return len(self._positions)
