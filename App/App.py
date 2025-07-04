@@ -35,7 +35,6 @@ class ParticleFlowLayer(Layer):
         self._domain_size = glm.vec3(1.2)
         self._friction_coefficient = 0.7
         self._particle_number = 100
-        self._particle_spacing = self._particle_size/2
         self._sim = Simulation(self._particle_number, self._particle_size, self._domain_size, self._friction_coefficient)
         self._minDt = 1/240
         
