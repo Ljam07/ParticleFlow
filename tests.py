@@ -2,8 +2,191 @@ import unittest
 import math
 import glm
 import copy
-from App.Simulation.Simulation import Simulation, Cell
+import glfw
 
+from App.Simulation.Simulation import Simulation, Cell
+from Engine.Renderer.Camera import Camera
+from Engine.Core.DeltaTime import DeltaTime
+from Engine.Renderer.Mesh import Mesh
+
+class TestCamera(unittest.TestCase):
+    def setUp(self):
+        # Initialize camera with known defaults
+        self.cam = Camera(
+            pivot=glm.vec3(0, 0, 0),
+            distance=5.0,
+            yaw=-90.0,
+            pitch=0.0,
+            fov=45.0,
+            aspect=4/3,
+            near=0.1,
+            far=100.0
+        )
+        # Backup original GLFW functions
+        self._orig_get_window_size  = glfw.get_window_size
+        self._orig_get_mouse_button = glfw.get_mouse_button
+        self._orig_get_key          = glfw.get_key
+        self._orig_get_cursor_pos   = glfw.get_cursor_pos
+        self._orig_set_input_mode   = glfw.set_input_mode
+        self._orig_set_cursor_pos   = glfw.set_cursor_pos
+
+    def tearDown(self):
+        # Restore GLFW functions
+        glfw.get_window_size    = self._orig_get_window_size
+        glfw.get_mouse_button   = self._orig_get_mouse_button
+        glfw.get_key            = self._orig_get_key
+        glfw.get_cursor_pos     = self._orig_get_cursor_pos
+        glfw.set_input_mode     = self._orig_set_input_mode
+        glfw.set_cursor_pos     = self._orig_set_cursor_pos
+
+    def test_get_camera_direction_default(self):
+        """Direction with yaw=-90°, pitch=0° should be (0,0,-1)."""
+        direction = self.cam.GetCameraDirection()
+        self.assertAlmostEqual(direction.x, 0.0, places=5)
+        self.assertAlmostEqual(direction.y, 0.0, places=5)
+        self.assertAlmostEqual(direction.z, -1.0, places=5)
+
+    def test_get_view_matrix_eye_position(self):
+        """With yaw=-90°, pitch=0°, eye should be at (0,0,-5)."""
+        view = self.cam.GetViewMatrix()
+        inv = glm.inverse(view)
+        eye = glm.vec3(inv[3].x, inv[3].y, inv[3].z)
+        self.assertAlmostEqual(eye.x, 0.0, places=5)
+        self.assertAlmostEqual(eye.y, 0.0, places=5)
+        self.assertAlmostEqual(eye.z, -5.0, places=5)
+
+    def test_on_update_zero_height(self):
+        """If window height is zero, aspect must remain unchanged."""
+        def stub_window_size(window):
+            return (100, 0)
+        glfw.get_window_size = stub_window_size
+
+        original_aspect = self.cam.aspect
+        self.cam.OnUpdate(None)
+        self.assertEqual(self.cam.aspect, original_aspect)
+
+    def test_on_update_toggle_dragging(self):
+        """Press then release left button toggles dragging state."""
+        # stub window size non-zero
+        def stub_window_size(window):
+            return (80, 40)
+        glfw.get_window_size = stub_window_size
+
+        # stub no modifier keys pressed
+        def stub_get_key(window, key):
+            return glfw.RELEASE
+        glfw.get_key = stub_get_key
+
+        # stub mouse button: first call returns PRESS, then RELEASE
+        call_count = {'n': 0}
+        def stub_mouse_button(window, button):
+            call_count['n'] += 1
+            if call_count['n'] == 1:
+                return glfw.PRESS
+            return glfw.RELEASE
+        glfw.get_mouse_button = stub_mouse_button
+
+        # stub cursor position always center
+        def stub_cursor_pos(window):
+            return (40.0, 20.0)
+        glfw.get_cursor_pos = stub_cursor_pos
+
+        # stub cursor and input-mode setters to no-op
+        def stub_set_input_mode(window, mode, value):
+            pass
+        glfw.set_input_mode = stub_set_input_mode
+
+        def stub_set_cursor_pos(window, x, y):
+            pass
+        glfw.set_cursor_pos = stub_set_cursor_pos
+
+        # First update -> start dragging
+        self.cam.OnUpdate(None)
+        self.assertTrue(self.cam._dragging)
+        self.assertEqual(self.cam._last_x, 40)
+        self.assertEqual(self.cam._last_y, 20)
+
+        # Second update -> end dragging
+        self.cam.OnUpdate(None)
+        self.assertFalse(self.cam._dragging)
+        self.assertIsNone(self.cam._last_x)
+        self.assertIsNone(self.cam._last_y)
+
+class TestGenerateUVSphere(unittest.TestCase):
+
+    def test_output_length(self):
+        stacks = 5
+        slices = 8
+        verts = Mesh.GenerateUVSphere(stacks, slices)
+        # each stack×slice produces 2 triangles,
+        # each triangle = 3 verts, each vert = 3 floats
+        expected_length = stacks * slices * 2 * 3 * 3
+        self.assertEqual(len(verts), expected_length)
+
+    def test_unit_sphere_simple_case(self):
+        # stacks=1,slices=1 should give 2 triangles = 6 verts = 18 floats
+        verts = Mesh.GenerateUVSphere(1, 1)
+        self.assertEqual(len(verts), 18)
+
+        # For stacks=1: phi0 = -pi/2, phi1 = +pi/2 → y0 = -1, y1 = +1; r0 = r1 = 0
+        # So all x,z == 0
+        # Triangle1: (0,-1,0),(0,1,0),(0,1,0)
+        # Triangle2: (0,-1,0),(0,1,0),(0,-1,0)
+        expected = [
+            0.0, -1.0,  0.0,
+            0.0,  1.0,  0.0,
+            0.0,  1.0,  0.0,
+            0.0, -1.0,  0.0,
+            0.0,  1.0,  0.0,
+            0.0, -1.0,  0.0,
+        ]
+        for v, e in zip(verts, expected):
+            self.assertAlmostEqual(v, e)
+
+    def test_custom_radius(self):
+        # same simple case but radius=2.0
+        verts = Mesh.GenerateUVSphere(1, 1, radius=2.0)
+        # y0 = -2, y1 = +2, x/z remain 0
+        expected = [
+            0.0, -2.0,  0.0,
+            0.0,  2.0,  0.0,
+            0.0,  2.0,  0.0,
+            0.0, -2.0,  0.0,
+            0.0,  2.0,  0.0,
+            0.0, -2.0,  0.0,
+        ]
+        for v, e in zip(verts, expected):
+            self.assertAlmostEqual(v, e)
+
+
+class TestDeltaTime(unittest.TestCase):
+    def test_get_seconds_zero(self):
+        dt = DeltaTime(0)
+        self.assertEqual(dt.GetSeconds(), 0)
+
+    def test_get_seconds_positive(self):
+        dt = DeltaTime(1.234)
+        self.assertAlmostEqual(dt.GetSeconds(), 1.234)
+
+    def test_get_seconds_negative(self):
+        dt = DeltaTime(-2.5)
+        self.assertAlmostEqual(dt.GetSeconds(), -2.5)
+
+    def test_get_milliseconds_zero(self):
+        dt = DeltaTime(0)
+        self.assertEqual(dt.GetMilliseconds(), 0)
+
+    def test_get_milliseconds_integer(self):
+        dt = DeltaTime(2)
+        self.assertEqual(dt.GetMilliseconds(), 2000)
+
+    def test_get_milliseconds_fraction(self):
+        dt = DeltaTime(0.75)
+        self.assertAlmostEqual(dt.GetMilliseconds(), 750)
+
+    def test_get_milliseconds_negative(self):
+        dt = DeltaTime(-1.2)
+        self.assertAlmostEqual(dt.GetMilliseconds(), -1200)
 
 class TestCell(unittest.TestCase):
     def setUp(self):

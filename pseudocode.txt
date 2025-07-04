@@ -1,0 +1,113 @@
+CLASS Cell:
+    - Holds a list of particle IDs
+
+    FUNCTION AddParticle(particleId):
+        Add the particle to the list
+
+    FUNCTION RemoveParticle(particleId):
+        Remove the particle from the list
+
+    FUNCTION Clear():
+        Clear the list of particles
+
+    FUNCTION IsEmpty():
+        Return true if there are no particles
+
+    FUNCTION GetParticles():
+        Return the list of particle IDs
+
+
+CLASS Simulation:
+    FUNCTION __init__(particleCount, particleSize, bounds, friction):
+        Initialise simulation parameters (gravity, damping, particle radius, etc.)
+        Set up lists to store particle positions, velocities, and colours
+        Set emission properties (rate, position, velocity)
+        Calculate the grid cell size and number of cells
+        Create a 3D grid of Cell objects
+        Define a list of neighbouring cell offsets for collision checking
+
+    FUNCTION CalculateOptimalCellSize(scale):
+        Return a suggested cell size based on particle size and spacing
+
+    FUNCTION OnUpdate(deltaTime):
+        If it's time to emit a new particle:
+            Add a new particle at the emitter
+        Else:
+            Accumulate elapsed time
+
+        Perform a fixed number of sub-steps:
+            Call OnUpdateSubstep() for each sub-step
+
+    FUNCTION AddParticle(position, velocity = default):
+        Add position, velocity, and colour for a new particle
+
+    FUNCTION OnUpdateSubstep(deltaTime):
+        For each particle:
+            Apply gravity to its velocity
+            Update its position based on velocity
+
+        For each particle:
+            Check for collisions with the simulation boundaries
+
+        Rebuild the spatial grid and handle nearby particle interactions
+
+    FUNCTION CheckWallCollisions(particleIndex):
+        If a particle is outside bounds:
+            Move it back inside and reflect its velocity (with friction)
+
+    FUNCTION CreateGrid():
+        Clear the grid
+        For each particle:
+            Determine which grid cell it belongs to
+            Add it to the corresponding cell
+
+        For each cell that has particles:
+            Call CheckNeighboringCells()
+
+    FUNCTION CheckNeighboringCells(cellX, cellY, cellZ):
+        Get particles in the current cell
+
+        For each unique pair of particles in the cell:
+            If they are overlapping:
+                Resolve the collision
+            Also check for wall collisions
+
+        For each neighbouring cell:
+            For each particle in current cell:
+                For each particle in neighbour:
+                    If they are overlapping:
+                        Resolve the collision
+
+    FUNCTION FindCollisions():
+        For each pair of particles:
+            If they are colliding:
+                Resolve the collision
+        Also check for wall collisions
+
+    FUNCTION IsColliding(p1, p2):
+        Return true if particles are overlapping
+
+    FUNCTION ResolveCollision(p1, p2):
+        Move the particles apart and adjust their velocities
+
+    FUNCTION GetCellIndex(position):
+        Convert a position in space into a grid cell index
+
+    // Accessor Functions:
+    FUNCTION GetPoints():
+        Return list of all particle positions
+
+    FUNCTION GetColors():
+        Return list of all particle colours
+
+    FUNCTION SetParticleSize(size):
+        Set the new particle size
+
+    FUNCTION SetBoundSize(bounds):
+        Set the new size of the simulation space
+
+    FUNCTION SetFrictionCoefficient(value):
+        Set how much particles slow down when hitting walls
+
+    FUNCTION GetParticleCount():
+        Return total number of particles in simulation
